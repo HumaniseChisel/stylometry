@@ -93,7 +93,7 @@ async def upload(file: UploadFile = File(...)):
             )
 
         # Generate random UUID filename with name as parent directory
-        s3_key = f"miketest2/{name}/{uuid.uuid4()}.json"
+        s3_key = f"new/{name}/{uuid.uuid4()}.json"
 
         # Upload to S3
         s3_client.put_object(

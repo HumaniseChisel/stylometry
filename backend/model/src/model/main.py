@@ -2,15 +2,15 @@ import torch
 from torch.utils.data import DataLoader
 
 from model import (
-    KeystrokeIDModel,
     KeystrokeDataProcessor,
+    KeystrokeIDModel,
     TensorDataset,
     evaluate_model,
     train_model,
 )
 
 # Configuration
-DIR_PATH = "./data"  # Point this to your root directory containing user folders
+DIR_PATH = "./model/src/model/data"  # Point this to your root directory containing user folders
 
 # Hyperparameters
 INPUT_SIZE = 3      # [Hold Time, Flight Time, Key Code]
@@ -24,8 +24,8 @@ EPOCHS = 20
 def main():
     # 1. Prepare Data
     print("Loading and processing data...")
-    processor = KeystrokeDataProcessor(root_dir=DIR_PATH)
-    processor.load_data()
+    processor = KeystrokeDataProcessor()
+    processor.load_from_directory(root_dir=DIR_PATH)
 
     (X_train, y_train), (X_val, y_val), (X_test, y_test), num_classes, scaler = processor.get_splits()
 
