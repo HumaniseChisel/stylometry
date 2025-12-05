@@ -1,7 +1,7 @@
 [project]
 name = "model"
 version = "0.1.0"
-description = "Add your description here"
+description = "Model training and evaluation scripts"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [

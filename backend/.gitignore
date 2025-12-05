@@ -1,0 +1,68 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Data directories
+data/
+*/data/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+wheels/
+pip-wheel-metadata/
+*.manifest
+*.spec
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# UV lock files (uncomment if you want to ignore)
+# uv.lock

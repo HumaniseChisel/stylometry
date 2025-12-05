@@ -1,11 +1,11 @@
 <script lang="ts">
   const API_BASE_URL = "http://localhost:8000"; // Base API endpoint
-  // const API_BASE_URL = "https://43f409bdcf90.ngrok-free.app"; // Base API endpoint
 
   let userTypedText = $state("");
   let userName = $state("");
 
-  const expectedText = ".tie5Roanl";
+  // const expectedText = ".tie5Roanl";
+  const expectedText = "the quick brown fox jumps over the lazy dog";
 
   type KeyLog = {
     key: string;
@@ -14,9 +14,9 @@
     flightTime: number;
   };
 
-  let fullKeyLogs = $state<KeyLog[]>([]);
-  let keyDownTime = $state<number | null>(null);
-  let lastKeyUpTime = $state<number | null>(null);
+  let keyLogs = $state<KeyLog[]>([]);
+  let keyDownTimes = new Map<string, DOMHighResTimeStamp>();
+
   let isLogExpanded = $state(false);
   let wrongChar = $state(false);
   let numTyped = $state(0);
@@ -31,15 +31,22 @@
     message: string;
   } | null>(null);
 
+  type InferenceResult = {
+    predicted_user: string;
+    confidence: number;
+    num_keystrokes: number;
+    original_filename: string;
+    all_classes: Record<string, number>;
+  };
+
+  let inferenceResult = $state<InferenceResult | null>(null);
+  let isInferring = $state(false);
+  let inferenceError = $state<string | null>(null);
+
   // Debugging logger
   $effect(() => {
-    console.log(
-      "Full Key Logs:",
-      fullKeyLogs[fullKeyLogs.length - 1]?.key || null
-    );
+    console.log("Key Logs:", keyLogs[keyLogs.length - 1]?.key || null);
   });
-
-  let keyDownTimes = new Map<string, DOMHighResTimeStamp>();
 
   function handleKeyDown(event: KeyboardEvent) {
     if (event.repeat) return; // Ignore key repeat
@@ -66,8 +73,8 @@
     const holdTime = keyUpTime - keyDownTime;
 
     let flightTime = 0;
-    if (fullKeyLogs.length > 0) {
-      const last = fullKeyLogs[fullKeyLogs.length - 1];
+    if (keyLogs.length > 0) {
+      const last = keyLogs[keyLogs.length - 1];
       const lastKeyUpTime = last.keyDownTime + last.holdTime;
       flightTime = keyDownTime - lastKeyUpTime;
       // if (lastKeyUpTime < keyDownTime) {
@@ -75,17 +82,22 @@
       // }
     }
 
-    fullKeyLogs.push({
+    keyLogs.push({
       key,
       keyDownTime,
       holdTime,
       flightTime,
     });
-    fullKeyLogs = [...fullKeyLogs];
 
     // Check for completion
     if (userTypedText === expectedText) {
-      handleSubmit();
+      if (keyLogs.length !== expectedText.length) {
+        // TODO: fix this
+        // alert(`Shoot something weird happened: ${keyLogs}`);
+      } else {
+        // TODO: turn submisson back on
+        // handleSubmit();
+      }
     }
   }
 
@@ -111,7 +123,7 @@
 
       const data = {
         name: userName,
-        keystrokeLogs: fullKeyLogs,
+        keystrokeLogs: keyLogs,
       };
 
       const jsonBlob = new Blob([JSON.stringify(data)], {
@@ -159,17 +171,60 @@
 
   function handleReset() {
     userTypedText = "";
-    fullKeyLogs = [];
-    keyDownTime = null;
-    lastKeyUpTime = null;
+    keyLogs = [];
+    keyDownTimes = new Map<string, DOMHighResTimeStamp>();
     // Note: We do NOT reset userName so you can easily do multiple trials
+  }
+
+  async function handleInference() {
+    if (isInferring) return;
+    isInferring = true;
+    inferenceError = null;
+    inferenceResult = null;
+
+    try {
+      const data = {
+        name: userName,
+        keystrokeLogs: keyLogs,
+      };
+
+      const jsonBlob = new Blob([JSON.stringify(data)], {
+        type: "application/json",
+      });
+      const jsonFile = new File([jsonBlob], "data.json", {
+        type: "application/json",
+      });
+
+      const formData = new FormData();
+      formData.append("file", jsonFile);
+
+      const response = await fetch(`${API_BASE_URL}/inference`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Inference failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      inferenceResult = result;
+    } catch (error) {
+      inferenceError =
+        error instanceof Error
+          ? error.message
+          : "Inference failed. Please try again.";
+    } finally {
+      isInferring = false;
+    }
   }
 </script>
 
 <div class="flex min-h-screen items-center justify-center p-4">
   <div class="w-full max-w-3xl space-y-6">
     <h1 class="text-4xl font-bold text-center">typometry</h1>
-    <h1>* NEGATIVE FLIGHT TIMES ARE NOW ALLOWED *</h1>
+    <!-- TODO: Why is this here? -->
+    <!-- <h1>* NEGATIVE FLIGHT TIMES ARE NOW ALLOWED *</h1> -->
 
     <div>
       <input
@@ -180,7 +235,8 @@
         placeholder="Enter your name to unlock the test..."
         class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
       />
-      {numTyped}
+      <!-- TODO: idek what to do with this -->
+      <!-- {numTyped} -->
     </div>
 
     <div class="rounded-lg border border-gray-300 bg-gray-50 p-4 select-none">
@@ -225,7 +281,21 @@
       {/if}
     </div>
 
-    <div class="flex justify-end">
+    <div class="flex justify-end gap-3">
+      <button
+        onclick={handleSubmit}
+        disabled={keyLogs.length === 0 || isSubmitting || isInferring}
+        class="rounded-lg bg-green-600 px-6 py-2 text-white font-semibold hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isSubmitting ? "Submitting..." : "Submit"}
+      </button>
+      <button
+        onclick={handleInference}
+        disabled={keyLogs.length === 0 || isInferring || isSubmitting}
+        class="rounded-lg bg-blue-600 px-6 py-2 text-white font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isInferring ? "Inferring..." : "Inference"}
+      </button>
       <button
         onclick={handleReset}
         disabled={userTypedText.length === 0 || isSubmitting}
@@ -258,10 +328,10 @@
         <div
           class="mt-2 max-h-64 overflow-y-auto bg-white rounded border border-gray-200 p-2 font-mono text-sm"
         >
-          {#if fullKeyLogs.length === 0}
+          {#if keyLogs.length === 0}
             <p class="text-gray-400">No keystrokes recorded yet...</p>
           {:else}
-            {#each fullKeyLogs as log, index (log.keyDownTime)}
+            {#each keyLogs as log, index (log.keyDownTime)}
               <div class="py-1 border-b border-gray-100 last:border-b-0">
                 <span class="text-gray-600">#{index + 1}</span> Key:
                 <span class="font-semibold">'{log.key}'</span>
@@ -276,5 +346,45 @@
         </div>
       {/if}
     </div>
+
+    {#if inferenceResult || inferenceError}
+      <div class="rounded-lg border border-gray-300 bg-gray-50 p-4">
+        <h3 class="text-lg font-semibold mb-3">Inference Results</h3>
+        {#if inferenceError}
+          <div
+            class="bg-red-100 text-red-800 border border-red-300 rounded-lg p-4"
+          >
+            <p class="font-medium">Error: {inferenceError}</p>
+          </div>
+        {:else if inferenceResult}
+          <div class="bg-white rounded border border-gray-200 p-4 space-y-3">
+            <div
+              class="flex justify-between items-center pb-2 border-b border-gray-200"
+            >
+              <span class="font-semibold text-gray-700">Predicted User:</span>
+              <span class="text-xl font-bold text-blue-600"
+                >{inferenceResult.predicted_user}</span
+              >
+            </div>
+            <div
+              class="flex justify-between items-center pb-2 border-b border-gray-200"
+            >
+              <span class="font-semibold text-gray-700">Confidence:</span>
+              <span class="text-lg font-semibold text-green-600"
+                >{(inferenceResult.confidence * 100).toFixed(2)}%</span
+              >
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="font-semibold text-gray-700"
+                >Keystrokes Analyzed:</span
+              >
+              <span class="text-lg font-semibold"
+                >{inferenceResult.num_keystrokes}</span
+              >
+            </div>
+          </div>
+        {/if}
+      </div>
+    {/if}
   </div>
 </div>
