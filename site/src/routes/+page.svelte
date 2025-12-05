@@ -1,7 +1,6 @@
 <script lang="ts">
   const API_BASE_URL = "http://localhost:8000"; // Base API endpoint
 
-  let userTypedText = $state("");
   let userName = $state("");
 
   // const expectedText = ".tie5Roanl";
@@ -10,12 +9,13 @@
   type KeyLog = {
     key: string;
     keyDownTime: number;
-    holdTime: number;
-    flightTime: number;
+    holdTime?: number;
+    flightTime?: number;
   };
 
   let keyLogs = $state<KeyLog[]>([]);
-  let keyDownTimes = new Map<string, DOMHighResTimeStamp>();
+  let charsTyped = $state(0);
+  let keyDownTimes = new Map<string, number>();
 
   let isLogExpanded = $state(false);
   let wrongChar = $state(false);
@@ -43,30 +43,36 @@
   let isInferring = $state(false);
   let inferenceError = $state<string | null>(null);
 
-  // Debugging logger
-  $effect(() => {
-    console.log("Key Logs:", keyLogs[keyLogs.length - 1]?.key || null);
-  });
-
   function handleKeyDown(event: KeyboardEvent) {
+    event.preventDefault();
     if (event.repeat) return; // Ignore key repeat
 
     const key = event.key;
-    // Basic validation to ensure they type the correct character
-    if (key != expectedText.at(userTypedText.length)) {
-      event.preventDefault();
+
+    if (key != expectedText.at(charsTyped)) {
       wrongChar = true;
       return;
     }
 
     wrongChar = false;
-    keyDownTimes.set(key, performance.now());
+    charsTyped++;
+    keyDownTimes.set(key, keyLogs.length);
+    keyLogs.push({
+      key,
+      keyDownTime: performance.now(),
+    });
   }
 
   function handleKeyUp(event: KeyboardEvent) {
     const key = event.key;
-    const keyDownTime = keyDownTimes.get(key);
-    if (keyDownTime === undefined) return;
+    const keyLogIdx = keyDownTimes.get(key);
+    if (keyLogIdx === undefined) return;
+
+    const keyDownTime = keyLogs[keyLogIdx].keyDownTime;
+    if (keyDownTime === undefined) {
+      alert("Key down time not found");
+      return;
+    }
     keyDownTimes.delete(key);
 
     const keyUpTime = performance.now();
@@ -75,47 +81,39 @@
     let flightTime = 0;
     if (keyLogs.length > 0) {
       const last = keyLogs[keyLogs.length - 1];
-      const lastKeyUpTime = last.keyDownTime + last.holdTime;
-      flightTime = keyDownTime - lastKeyUpTime;
-      // if (lastKeyUpTime < keyDownTime) {
-      //   flightTime = keyDownTime - lastKeyUpTime;
-      // }
+      if (last.holdTime !== undefined) {
+        const lastKeyUpTime = last.keyDownTime + last.holdTime;
+        flightTime = keyDownTime - lastKeyUpTime;
+      }
     }
 
-    keyLogs.push({
+    keyLogs[keyLogIdx] = {
       key,
       keyDownTime,
       holdTime,
       flightTime,
-    });
+    };
 
     // Check for completion
-    if (userTypedText === expectedText) {
-      if (keyLogs.length !== expectedText.length) {
-        // TODO: fix this
-        // alert(`Shoot something weird happened: ${keyLogs}`);
+    if (keyLogs.length === expectedText.length) {
+      const loggedString = keyLogs.map(({ key }) => key).join("");
+      if (loggedString !== expectedText) {
+        alert(`Shoot, got ${loggedString}`);
       } else {
-        // TODO: turn submisson back on
-        // handleSubmit();
+        handleSubmit();
       }
     }
   }
 
-  function handleInput(event: Event) {
-    const target = event.target as HTMLTextAreaElement;
-    const newValue = target.value;
+  async function handleSubmit() {
+    if (isSubmitting) return;
 
-    // Allow deleting all text (select all + delete) and reset logs
-    if (newValue === "") {
-      handleReset();
+    const loggedString = keyLogs.map(({ key }) => key).join("");
+    if (loggedString !== expectedText) {
+      alert(`Got "${loggedString}" instead of "${expectedText}"`);
       return;
     }
 
-    userTypedText = newValue;
-  }
-
-  async function handleSubmit() {
-    if (isSubmitting) return;
     isSubmitting = true;
 
     try {
@@ -170,10 +168,9 @@
   }
 
   function handleReset() {
-    userTypedText = "";
     keyLogs = [];
     keyDownTimes = new Map<string, DOMHighResTimeStamp>();
-    // Note: We do NOT reset userName so you can easily do multiple trials
+    charsTyped = 0;
   }
 
   async function handleInference() {
@@ -240,17 +237,15 @@
     </div>
 
     <div class="rounded-lg border border-gray-300 bg-gray-50 p-4 select-none">
-      <p class="text-lg font-mono text-center">
-        <span class="text-gray-400"
-          >{expectedText.slice(0, userTypedText.length)}</span
-        ><span>{expectedText.slice(userTypedText.length)}</span>
+      <p class="text-lg font-mono">
+        <span class="text-gray-400">{expectedText.slice(0, charsTyped)}</span
+        ><span>{expectedText.slice(charsTyped)}</span>
       </p>
     </div>
 
     <div class="relative">
       <textarea
-        value={userTypedText}
-        oninput={handleInput}
+        value={expectedText.slice(0, charsTyped)}
         onkeydown={handleKeyDown}
         onkeyup={handleKeyUp}
         disabled={userName.trim() === "" || isSubmitting}
@@ -261,7 +256,7 @@
         {userName.trim() === '' || isSubmitting
           ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
           : 'bg-white text-black border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500'}
-        {userTypedText.length === expectedText.length && !isSubmitting
+        {keyLogs.length === expectedText.length && !isSubmitting
           ? 'border-green-500 focus:border-green-500 focus:ring-green-500'
           : ''}
         {wrongChar &&
@@ -298,7 +293,7 @@
       </button>
       <button
         onclick={handleReset}
-        disabled={userTypedText.length === 0 || isSubmitting}
+        disabled={keyLogs.length === 0 || isSubmitting}
         class="rounded-lg bg-gray-600 px-6 py-2 text-white font-semibold hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Reset
@@ -336,9 +331,12 @@
                 <span class="text-gray-600">#{index + 1}</span> Key:
                 <span class="font-semibold">'{log.key}'</span>
                 | Hold:
-                <span class="text-blue-600">{log.holdTime.toFixed(1)}ms</span>
+                <span class="text-blue-600"
+                  >{log.holdTime?.toFixed(1) ?? "N/A"}ms</span
+                >
                 | Flight:
-                <span class="text-green-600">{log.flightTime.toFixed(1)}ms</span
+                <span class="text-green-600"
+                  >{log.flightTime?.toFixed(1) ?? "N/A"}ms</span
                 >
               </div>
             {/each}
