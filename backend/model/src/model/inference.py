@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 import seaborn as sns
 import matplotlib.pyplot as plt
-from model import KeystrokeIDModel
+from .model import KeystrokeIDModel
 
 
 def evaluate_model(model, test_loader, device, class_map):
